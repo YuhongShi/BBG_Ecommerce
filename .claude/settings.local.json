@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\Workstation_Yuhong\\\\BBG\\\\电商\\\\网买做账\" -Recurse)",
+      "Bash(Select-Object FullName, Length, LastWriteTime)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(python --version; python -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "PowerShell(python -c \"import openpyxl; print\\('ok'\\)\" 2>&1)",
+      "Bash(python *)",
+      "Bash(pip show *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Workstation_Yuhong\\\\Yuhong's_File\\\\Python\\\\Buchhaltung\" -Recurse -Filter \"*Umsatzsteuer*\")",
+      "Bash(Select-Object FullName)",
+      "Bash(python3 *)",
+      "Bash(Get-ChildItem \"D:\\\\Workstation_Yuhong\\\\Yuhong's_File\\\\Python\\\\BBG_Ecommerce\" -Filter \"*.py\" -Exclude \".venv\")",
+      "Bash(.venv\\\\Scripts\\\\python.exe fill_amazon.py)"
+    ]
+  }
+}
