@@ -4,8 +4,8 @@ import glob
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-FOLDER = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Amazon\2026年4月"
-XLSX   = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_April.xlsx"
+FOLDER = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Amazon\2026年5月"
+XLSX   = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_Mai.xlsx"
 
 AMAZON_HEADERS = [
     'Nr', 'Marktplatz', 'Settlement-Periode',
@@ -123,7 +123,8 @@ for fpath, fname, lines, summe in positive_files:
         elif amt_type == 'Promotion':
             promotion += amt
             classified = True
-        elif tx_type == 'ServiceFee' and amt_desc == 'Cost of Advertising':
+        elif tx_type == 'ServiceFee' and (amt_desc == 'Cost of Advertising'
+                                           or amt_type == 'Cost of Advertising'):
             werbung += amt
             classified = True
         elif tx_type == 'other-transaction' and amt_desc == 'Storage Fee':

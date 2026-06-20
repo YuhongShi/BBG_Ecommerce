@@ -2,18 +2,18 @@
 # -*- coding: utf-8 -*-
 """fill_kaufland.py — Fill Kaufland sheet + Sheet1 in Umsatzsteuer file.
 
-Column structure (13 cols):
+Column structure (14 cols):
   1=Nr, 2=Marktplatz, 3=Netto_Sale, 4=Ust, 5=Brutto_Sale,
   6=Erstattung(19%), 7=Marktpaltzgebühr(19%), 8=Commission(19%),
-  9=Gutscheingebühr(19%), 10=Steuer_Ohne_Gebühr(19%),
-  11=KTO_Guthaben, 12=Behalten_in_KTO, 13=Summe
+  9=Gutscheingebühr(19%), 10=Steuer_Ohne_Gebühr(19%), 11=Sonstiges(19%),
+  12=KTO_Guthaben, 13=Behalten_in_KTO, 14=Summe
 
 Sheet1 target:
   Col 5=Brrutto_Umsatz, Col 6=Andere Gebühren,
   Col 7=KTO_Guthaben, Col 8=Behalten_in_KTO
 """
 
-import sys, re, argparse
+import sys, re, argparse, os
 import openpyxl
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -42,10 +42,10 @@ COUNTRY_S1_LABELS = {
     "德国站":     ["Kaufland", "Kaufland-DE"],
     "奥地利站":   ["Kaufland", "Kaufland-AT"],
     "法国站":     ["Kaufland", "Kaufland-FR"],
-    "斯洛伐克站": ["Kaufland"],
-    "意大利站":   ["Kaufland"],
-    "捷克站":     ["KTO"],
-    "波兰站":     ["IBAN", "IBAN(Unbekannt)"],
+    "斯洛伐克站": ["Kaufland", "Kaufland-SK"],
+    "意大利站":   ["Kaufland", "Kaufland-IT"],
+    "捷克站":     ["KTO", "Kaufland-CZ"],
+    "波兰站":     ["IBAN", "IBAN(Unbekannt)", "Kaufland-PL"],
 }
 COUNTRY_MARKT = {
     "德国站":     "Kaufland-DE",
@@ -65,7 +65,11 @@ COUNTRY_TAX_RATE = {
     "捷克站":     0.21,
     "波兰站":     0.23,
 }
-ALL_KL_LABELS = {"Kaufland","Kaufland-DE","Kaufland-AT","Kaufland-FR","KTO","IBAN","IBAN(Unbekannt)"}
+ALL_KL_LABELS = {
+    "Kaufland", "Kaufland-DE", "Kaufland-AT", "Kaufland-FR",
+    "Kaufland-SK", "Kaufland-IT", "Kaufland-CZ", "Kaufland-PL",
+    "KTO", "IBAN", "IBAN(Unbekannt)",
+}
 FUZZY_TOL = 0.06
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -157,8 +161,8 @@ def classify_tx(bt, amt, sg, fg):
         return [("marktplatz", amt)]
     if "gutschein" in canonical_lo or "voucher" in canonical_lo:
         return [("gutschein", amt)]
-    # Sponsored ads, other per-sale fees, and unrecognised entries
-    return [("commission", amt)]
+    # Sponsored ads, EPR fees, and other unrecognised entries → Sonstiges
+    return [("sonstiges", amt)]
 
 # ── Step 1: load files ─────────────────────────────────────────────────────
 print("Loading Kaufland raw data…")
@@ -171,7 +175,7 @@ else:
     wb_prev = None
 
 print("Loading Umsatzsteuer file…")
-wb_us = openpyxl.load_workbook(UMSATZ_FILE)
+wb_us = openpyxl.load_workbook(UMSATZ_FILE, data_only=True)
 ws_s1   = wb_us["Sheet1"]
 ws_kauf = wb_us["Kaufland"]
 
@@ -261,6 +265,22 @@ for country, cfg in COUNTRY_CFG.items():
                       f"last_payout_bal={prev_bal_local:.2f}{currency}, tail_rows={len(prev_tail_rows)}")
             else:
                 print(f"  [WARN] Could not locate DE sheet in prev Kaufland file")
+    else:
+        # Non-DE country without embedded prev sheet.
+        # Read the tail rows from wb_prev (transactions after the last prev-period payout).
+        # These carry the account's opening balance into the first current-period group.
+        if wb_prev is not None:
+            # Pick the sheet with the LATEST year-month for this country in wb_prev.
+            # (prev file may contain both current and embedded-prev sheets; we want the latest.)
+            non_de_candidates = [
+                (extract_ym(sn), sn) for sn in wb_prev.sheetnames
+                if country in sn and extract_ym(sn) is not None
+            ]
+            non_de_prev_sn = max(non_de_candidates, key=lambda x: x[0])[1] if non_de_candidates else None
+            if non_de_prev_sn:
+                prev_bal_local, prev_tail_rows = get_prev_tail(wb_prev[non_de_prev_sn])
+                print(f"  [{country}] prev tail '{non_de_prev_sn}' (prev file): "
+                      f"last_payout_bal={prev_bal_local:.2f}{currency}, tail_rows={len(prev_tail_rows)}")
 
     # Read current-period rows
     cur_rows = read_sheet_rows(ws_cur)
@@ -295,8 +315,9 @@ for country, cfg in COUNTRY_CFG.items():
         payout_local = abs(payout["amount"])
         payout_eur   = r2(payout_local * rate)
 
+        old_prev_bal = prev_bal
         kto_gut      = r2(prev_bal * rate)
-        behalten_val = r2(-payout["balance"] * rate)  # negative: kept out of settlement
+        behalten_val = r2(-payout["balance"] * rate)  # negative: amount kept back (deduction sign)
         prev_bal     = payout["balance"]              # 0 for non-DE, retained for DE
 
         if not txns:
@@ -305,14 +326,17 @@ for country, cfg in COUNTRY_CFG.items():
                 sheet=current_sn, country=country, currency=currency, tax_rate=tax_rate,
                 brutto=0.0, netto=0.0, ust=0.0,
                 erstattung=0.0, marktplatz=0.0, commission=0.0,
-                gutschein=0.0, steuer=0.0,
+                gutschein=0.0, steuer=0.0, sonstiges=0.0,
                 kto_gut=kto_gut, behalten=behalten_val,
+                kto_gut_local=old_prev_bal, behalten_local=-payout["balance"],
+                rate_used=rate,
                 summe_local=r2(payout_local), summe_eur=payout_eur,
                 pure_balance=True,
             )
         else:
             totals = {"brutto": 0.0, "erstattung": 0.0, "marktplatz": 0.0,
-                      "commission": 0.0, "gutschein": 0.0, "steuer": 0.0}
+                      "commission": 0.0, "gutschein": 0.0, "steuer": 0.0,
+                      "sonstiges": 0.0}
             for tx in txns:
                 for field, val in classify_tx(tx["bt"], tx["amount"], tx["sgross"], tx["fgross"]):
                     totals[field] += val
@@ -332,8 +356,13 @@ for country, cfg in COUNTRY_CFG.items():
                 commission=r2(totals["commission"] * rate),
                 gutschein=r2(totals["gutschein"]   * rate),
                 steuer=r2(totals["steuer"]         * rate),
+                sonstiges=r2(totals["sonstiges"]   * rate),
                 kto_gut=kto_gut,
                 behalten=behalten_val,
+                totals_local=dict(totals),
+                kto_gut_local=old_prev_bal,
+                behalten_local=-payout["balance"],
+                rate_used=rate,
                 summe_local=r2(payout_local),
                 summe_eur=payout_eur,
                 pure_balance=False,
@@ -345,6 +374,45 @@ for country, cfg in COUNTRY_CFG.items():
 # the previous month's LAST payout may have arrived in the current month's bank
 # account.  Process it from the prev file so it can be matched to Sheet1.
 if wb_prev:
+    # Load prev-month pending file to know which payouts were actually SKIP'd.
+    # Only those should be re-attempted in Step 5b; ones that were already
+    # matched in the prev month must not appear as "pending" in the current month.
+    umsatz_dir    = os.path.dirname(os.path.abspath(UMSATZ_FILE))
+    monat_m_curr  = re.search(r'Umsatzsteuer_(.+)\.xlsx', os.path.basename(UMSATZ_FILE))
+    current_monat = monat_m_curr.group(1) if monat_m_curr else None
+    pp_candidates = []
+    for _fn in os.listdir(umsatz_dir):
+        _pm = re.match(r'Kaufland_pending_(.+)\.txt', _fn)
+        if _pm and _pm.group(1) != current_monat:
+            pp_candidates.append(_fn)
+    prev_pending_set = None  # None = no filtering (prev file not found → first run)
+    if pp_candidates:
+        # Most recently modified = immediately previous month
+        pp_candidates.sort(
+            key=lambda f: os.path.getmtime(os.path.join(umsatz_dir, f)), reverse=True)
+        pp_path = os.path.join(umsatz_dir, pp_candidates[0])
+        prev_pending_set = set()
+        with open(pp_path, encoding="utf-8") as _pp:
+            for _line in _pp:
+                _line = _line.rstrip()
+                if not _line or _line.startswith('#') or '─' in _line or _line.startswith('国家'):
+                    continue
+                _parts = _line.split()
+                if not _parts:
+                    continue
+                _ctry = _parts[0]
+                # Non-EUR line: "AMOUNT CZK/PLN  (X.XX EUR)" → key by local amount
+                _m_loc = re.search(r'(\d+\.\d+)\s+(CZK|PLN)\s+\(', _line)
+                # EUR line: "AMOUNT EUR" at end → key by EUR amount
+                _m_eur = re.search(r'(\d+\.\d+)\s+EUR\s*$', _line)
+                if _m_loc:
+                    prev_pending_set.add((_ctry, round(float(_m_loc.group(1)), 2)))
+                elif _m_eur:
+                    prev_pending_set.add((_ctry, round(float(_m_eur.group(1)), 2)))
+        print(f"  Prev pending: {pp_candidates[0]}  ({len(prev_pending_set)} entries to re-check)")
+    else:
+        print(f"  Prev pending: (none found — no filtering for Step 5b)")
+
     # Build country→sheets map for prev file
     prev_csm = {}
     for sn in wb_prev.sheetnames:
@@ -396,58 +464,80 @@ if wb_prev:
         if not payout_indices:
             continue
 
-        last_idx       = payout_indices[-1]
-        second_last_idx = payout_indices[-2] if len(payout_indices) >= 2 else None
-        start_idx      = (second_last_idx + 1) if second_last_idx is not None else 0
-        last_txns      = prev_rows[start_idx:last_idx]
-        payout_row     = prev_rows[last_idx]
-        payout_local   = abs(payout_row["amount"])
-        payout_eur     = r2(payout_local * rate)
-
-        kto_gut_local  = prev_rows[second_last_idx]["balance"] if second_last_idx is not None else 0.0
-        kto_gut        = r2(kto_gut_local * rate)
-        behalten_val   = r2(-payout_row["balance"] * rate)
-
+        # Detect tax rate once per country (not per payout)
         tax_rate = COUNTRY_TAX_RATE[country]
         for row in prev_rows:
             if (row["bt"].startswith("Freigabe") or row["bt"].startswith("Release order")) and row["vat_pct"] > 0:
                 tax_rate = row["vat_pct"] / 100
                 break
 
-        if last_txns:
-            totals = {"brutto": 0.0, "erstattung": 0.0, "marktplatz": 0.0,
-                      "commission": 0.0, "gutschein": 0.0, "steuer": 0.0}
-            for tx in last_txns:
-                for field, val in classify_tx(tx["bt"], tx["amount"], tx["sgross"], tx["fgross"]):
-                    totals[field] += val
-            brutto_local = totals["brutto"]
-            brutto_eur   = r2(brutto_local * rate)
-            netto_eur    = r2(brutto_eur / (1 + tax_rate))
-            ust_eur      = r2(brutto_eur - netto_eur)
-            rec = dict(
-                sheet=f"[prev]{latest_sn}", country=country, currency=currency, tax_rate=tax_rate,
-                brutto=brutto_eur, netto=netto_eur, ust=ust_eur,
-                erstattung=r2(totals["erstattung"] * rate),
-                marktplatz=r2(totals["marktplatz"] * rate),
-                commission=r2(totals["commission"] * rate),
-                gutschein=r2(totals["gutschein"]   * rate),
-                steuer=r2(totals["steuer"]         * rate),
-                kto_gut=kto_gut, behalten=behalten_val,
-                summe_local=r2(payout_local), summe_eur=payout_eur,
-                pure_balance=False,
-            )
-        else:
-            rec = dict(
-                sheet=f"[prev]{latest_sn}", country=country, currency=currency, tax_rate=tax_rate,
-                brutto=0.0, netto=0.0, ust=0.0,
-                erstattung=0.0, marktplatz=0.0, commission=0.0,
-                gutschein=0.0, steuer=0.0,
-                kto_gut=kto_gut, behalten=behalten_val,
-                summe_local=r2(payout_local), summe_eur=payout_eur,
-                pure_balance=True,
-            )
-        all_payouts.append(rec)
-        print(f"  [PREV] {country:10s} {latest_sn:30s}  last_payout={payout_eur:.2f}EUR")
+        # Iterate over all payouts in the prev file.
+        # With prev_pending_set: include only entries that were SKIP'd in prev month.
+        # Without prev_pending_set (first run): include only the last payout.
+        for k, cur_idx in enumerate(payout_indices):
+            prev_idx     = payout_indices[k - 1] if k > 0 else None
+            payout_row   = prev_rows[cur_idx]
+            payout_local = abs(payout_row["amount"])
+            payout_eur   = r2(payout_local * rate)
+
+            # Filter: local amount for CZK/PLN (EUR equiv varies by rate), EUR otherwise
+            _pp_key = (country, round(payout_local, 2)) if currency != "EUR" else (country, payout_eur)
+            if prev_pending_set is not None:
+                if _pp_key not in prev_pending_set:
+                    continue  # already matched in prev month — not pending
+            else:
+                if cur_idx != payout_indices[-1]:
+                    continue  # first-run fallback: only last payout
+
+            start_idx     = (prev_idx + 1) if prev_idx is not None else 0
+            group_txns    = prev_rows[start_idx:cur_idx]
+            kto_gut_local = prev_rows[prev_idx]["balance"] if prev_idx is not None else 0.0
+            kto_gut       = r2(kto_gut_local * rate)
+            behalten_val  = r2(payout_row["balance"] * rate)
+
+            if group_txns:
+                totals = {"brutto": 0.0, "erstattung": 0.0, "marktplatz": 0.0,
+                          "commission": 0.0, "gutschein": 0.0, "steuer": 0.0,
+                          "sonstiges": 0.0}
+                for tx in group_txns:
+                    for field, val in classify_tx(tx["bt"], tx["amount"], tx["sgross"], tx["fgross"]):
+                        totals[field] += val
+                brutto_local = totals["brutto"]
+                brutto_eur   = r2(brutto_local * rate)
+                netto_eur    = r2(brutto_eur / (1 + tax_rate))
+                ust_eur      = r2(brutto_eur - netto_eur)
+                rec = dict(
+                    sheet=f"[prev]{latest_sn}", country=country, currency=currency, tax_rate=tax_rate,
+                    brutto=brutto_eur, netto=netto_eur, ust=ust_eur,
+                    erstattung=r2(totals["erstattung"] * rate),
+                    marktplatz=r2(totals["marktplatz"] * rate),
+                    commission=r2(totals["commission"] * rate),
+                    gutschein=r2(totals["gutschein"]   * rate),
+                    steuer=r2(totals["steuer"]         * rate),
+                    sonstiges=r2(totals["sonstiges"]   * rate),
+                    kto_gut=kto_gut, behalten=behalten_val,
+                    totals_local=dict(totals),
+                    kto_gut_local=kto_gut_local,
+                    behalten_local=-payout_row["balance"],
+                    rate_used=rate,
+                    summe_local=r2(payout_local), summe_eur=payout_eur,
+                    pure_balance=False,
+                )
+            else:
+                rec = dict(
+                    sheet=f"[prev]{latest_sn}", country=country, currency=currency, tax_rate=tax_rate,
+                    brutto=0.0, netto=0.0, ust=0.0,
+                    erstattung=0.0, marktplatz=0.0, commission=0.0,
+                    gutschein=0.0, steuer=0.0, sonstiges=0.0,
+                    kto_gut=kto_gut, behalten=behalten_val,
+                    kto_gut_local=kto_gut_local,
+                    behalten_local=-payout_row["balance"],
+                    rate_used=rate,
+                    summe_local=r2(payout_local), summe_eur=payout_eur,
+                    pure_balance=True,
+                )
+            all_payouts.append(rec)
+            print(f"  [PREV] {country:10s} {latest_sn:30s}  payout={payout_eur:.2f}EUR")
 
 print(f"Total payout records: {len(all_payouts)}")
 
@@ -456,6 +546,7 @@ print(f"Total payout records: {len(all_payouts)}")
 # claim their Sheet1 entries first, avoiding greedy mis-assignment for
 # PLN/CZK pairs with nearly equal fuzzy errors.
 matches = []
+skips   = []
 
 for p in sorted(all_payouts, key=lambda x: x["summe_eur"], reverse=True):
     summe   = p["summe_eur"]
@@ -485,6 +576,7 @@ for p in sorted(all_payouts, key=lambda x: x["summe_eur"], reverse=True):
         print(f"  MATCH  {p['country']:10s} {p['sheet']:26s}  "
               f"payout={summe:8.2f}EUR  →  Nr={best['nr']:>3}  ({best['label']} {best['betrag']:.2f})")
     else:
+        skips.append(p)
         print(f"  SKIP   {p['country']:10s} {p['sheet']:26s}  "
               f"payout={summe:8.2f}EUR  (no Sheet1 match → next month or later)")
 
@@ -501,7 +593,7 @@ else:
 HEADERS = [
     "Nr", "Marktplatz", "Netto_Sale", "Ust", "Brutto_Sale",
     "Erstattung(19%)", "Marktpaltzgebühr(19%)", "Commission(19%)",
-    "Gutscheingebühr(19%)", "Steuer_Ohne_Gebühr(19%)",
+    "Gutscheingebühr(19%)", "Steuer_Ohne_Gebühr(19%)", "Sonstiges(19%)",
     "KTO_Guthaben", "Behalten_in_KTO", "Summe",
 ]
 for c, h in enumerate(HEADERS, 1):
@@ -515,7 +607,7 @@ if not ws_s1.cell(1, 12).value:
 
 # Clear old data (rows 2+)
 for r in range(2, ws_kauf.max_row + 1):
-    for c in range(1, 14):
+    for c in range(1, 15):
         ws_kauf.cell(r, c).value = None
 
 matches.sort(key=lambda x: x[0]["nr"])
@@ -530,18 +622,35 @@ for i, (s1, p) in enumerate(matches):
     nr  = s1["nr"]
     mk  = COUNTRY_MARKT[p["country"]]
 
-    brutto     = p["brutto"]
-    tax_rate   = p["tax_rate"]
-    netto      = p["netto"]  if not p["pure_balance"] else r2(brutto / (1 + tax_rate))
-    ust        = p["ust"]    if not p["pure_balance"] else r2(brutto - netto)
-    erstattung = p["erstattung"] or None
-    marktplatz = p["marktplatz"] or None
-    commission = p["commission"] or None
-    gutschein  = p["gutschein"]  or None
-    steuer     = p["steuer"]     or None
-    kto_gut    = p["kto_gut"]    or None
-    behalten   = p["behalten"]   or None
-    summe      = p["summe_eur"]
+    tax_rate = p["tax_rate"]
+    # Derive per-payout actual exchange rate from the bank Betrag.
+    # For EUR rows actual_rate = 1.0 (rate_used); for CZK/PLN this eliminates
+    # the monthly-average-vs-daily-rate discrepancy.
+    if p["currency"] != "EUR" and p["summe_local"]:
+        actual_rate = s1["betrag"] / p["summe_local"]
+    else:
+        actual_rate = p["rate_used"]
+
+    if p["pure_balance"]:
+        brutto = 0.0
+        netto  = 0.0
+        ust    = 0.0
+        erstattung = marktplatz = commission = None
+        gutschein  = steuer     = sonstiges  = None
+    else:
+        tl         = p["totals_local"]
+        brutto     = r2(tl["brutto"]     * actual_rate)
+        netto      = r2(brutto / (1 + tax_rate))
+        ust        = r2(brutto - netto)
+        erstattung = r2(tl["erstattung"] * actual_rate) or None
+        marktplatz = r2(tl["marktplatz"] * actual_rate) or None
+        commission = r2(tl["commission"] * actual_rate) or None
+        gutschein  = r2(tl["gutschein"]  * actual_rate) or None
+        steuer     = r2(tl["steuer"]     * actual_rate) or None
+        sonstiges  = r2(tl["sonstiges"]  * actual_rate) or None
+    kto_gut  = r2(p["kto_gut_local"]  * actual_rate) or None
+    behalten = r2(p["behalten_local"] * actual_rate) or None
+    summe    = s1["betrag"]
 
     ws_kauf.cell(row,  1).value = nr
     ws_kauf.cell(row,  2).value = mk
@@ -553,14 +662,15 @@ for i, (s1, p) in enumerate(matches):
     ws_kauf.cell(row,  8).value = commission
     ws_kauf.cell(row,  9).value = gutschein
     ws_kauf.cell(row, 10).value = steuer
-    ws_kauf.cell(row, 11).value = kto_gut
-    ws_kauf.cell(row, 12).value = behalten
-    ws_kauf.cell(row, 13).value = summe
+    ws_kauf.cell(row, 11).value = sonstiges
+    ws_kauf.cell(row, 12).value = kto_gut
+    ws_kauf.cell(row, 13).value = behalten
+    ws_kauf.cell(row, 14).value = summe
 
-    # inner check
+    # inner check: payout = brutto + fees + KTO_Guthaben − Behalten_in_KTO
     fields = [brutto,
               erstattung or 0, marktplatz or 0, commission or 0,
-              gutschein  or 0, steuer     or 0,
+              gutschein  or 0, steuer     or 0, sonstiges  or 0,
               kto_gut    or 0, behalten   or 0]
     inner_diff = r2(r2(sum(fields)) - summe)
 
@@ -568,7 +678,7 @@ for i, (s1, p) in enumerate(matches):
     #   5=Brrutto_Umsatz, 6=Andere Gebühren (19% fees only, excl. steuer),
     #   7=KTO_Guthaben, 8=Behalten, 10=Gebühren Ohne Steuer, 11=Steuersatz
     andere = r2(sum([erstattung or 0, marktplatz or 0, commission or 0,
-                     gutschein  or 0]))  # steuer excluded
+                     gutschein  or 0, sonstiges  or 0]))  # steuer excluded
     ws_s1.cell(s1["row"], 5).value  = brutto or None
     ws_s1.cell(s1["row"], 6).value  = andere or None
     ws_s1.cell(s1["row"], 7).value  = kto_gut
@@ -578,10 +688,32 @@ for i, (s1, p) in enumerate(matches):
     ws_s1.cell(s1["row"], 12).value = mk
 
     s1_diff = r2(s1["betrag"] - summe)
+    rate_tag = f"  rate={actual_rate:.5f}" if p["currency"] != "EUR" else ""
     print(f"{nr:>4}  {mk:<14}  {brutto:>10.2f}  {summe:>10.2f}  "
-          f"{s1['betrag']:>10.2f}  {s1_diff:>8.2f}  {inner_diff:>9.2f}")
+          f"{s1['betrag']:>10.2f}  {s1_diff:>8.2f}  {inner_diff:>9.2f}{rate_tag}")
 
 # ── Step 8: save ───────────────────────────────────────────────────────────
 wb_us.save(UMSATZ_FILE)
 print(f"\n✓ Saved: {UMSATZ_FILE}")
 print(f"  {len(matches)} rows written to Kaufland sheet, {len(matches)} Sheet1 rows updated.")
+
+# ── Step 9: write pending-payouts file ─────────────────────────────────────
+monat_m      = re.search(r'Umsatzsteuer_(.+)\.xlsx', os.path.basename(UMSATZ_FILE))
+monat        = monat_m.group(1) if monat_m else "unbekannt"
+pending_file = os.path.join(os.path.dirname(UMSATZ_FILE) or ".", f"Kaufland_pending_{monat}.txt")
+with open(pending_file, "w", encoding="utf-8") as pf:
+    pf.write(f"# Kaufland 待到账 Payouts — {monat}\n")
+    pf.write(f"# 以下 payout 在本月 Kontodruckansicht 中未出现，预计下月到账。\n")
+    pf.write(f"# 执行下月做账时请核对 Sheet1 中是否已收到这些款项。\n\n")
+    if skips:
+        pf.write(f"{'国家/站点':<12}  {'来源Sheet':<32}  {'金额':>18}\n")
+        pf.write("─" * 68 + "\n")
+        for s in sorted(skips, key=lambda x: x["summe_eur"], reverse=True):
+            if s["currency"] == "EUR":
+                pf.write(f"{s['country']:<12}  {s['sheet']:<32}  {s['summe_eur']:>12.2f} EUR\n")
+            else:
+                pf.write(f"{s['country']:<12}  {s['sheet']:<32}  "
+                         f"{s['summe_local']:>10.2f} {s['currency']}  ({s['summe_eur']:.2f} EUR)\n")
+    else:
+        pf.write("  (本月无待到账 payout)\n")
+print(f"✓ Pending payouts saved: {pending_file}  ({len(skips)} entries)")
