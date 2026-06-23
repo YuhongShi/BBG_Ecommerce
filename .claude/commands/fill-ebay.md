@@ -2,11 +2,11 @@
 
 ## 所需文件
 
-- **来源文件**：`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Kontoauszug_Ebay.xlsx`，Sheet 名：`Ebay_Umsatz`
+- **来源文件**：`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Kontoauszug_Ebay.xlsx`，Sheet 名：`Ebay_Umsatz`
 - **目标文件**：当月 Umsatzsteuer 文件，例如 `D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_März.xlsx`
   - 如果用户在指令中指定了月份（如"三月"、"April"），自动推断对应文件名
   - 如果未指定，询问用户
-- **参考文件（核查用）**：`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Ebay_Rechnung\bis[YYYYMM]\`，CSV 文件名即为对应 Betrag 金额（如 `36.35.csv`）
+- **参考文件（核查用）**：`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Ebay_Rechnung\bis[YYYYMM]\`，CSV 文件名即为对应 Betrag 金额（如 `36.35.csv`）
 
 如果 openpyxl 未安装，先运行 `pip install openpyxl`。
 

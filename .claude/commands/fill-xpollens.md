@@ -6,7 +6,7 @@
 - **目标文件**：当月 Umsatzsteuer 文件，例如 `Umsatzsteuer_April.xlsx`
   - 如果用户在指令中指定了月份（如"四月"、"April"），自动推断对应文件名
   - 如果未指定，询问用户
-- **处理脚本**：`D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce\fill_xpollens.py`
+- **处理脚本**：`D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce\fill_xpollens.py`
 
 ---
 
@@ -34,7 +34,7 @@
 ### 第二步：运行脚本
 
 ```
-python "D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce\fill_xpollens.py" \
+python "D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce\fill_xpollens.py" \
   --umsatz "<Umsatzsteuer文件路径>" \
   --year <年份> \
   --month <月份数字>

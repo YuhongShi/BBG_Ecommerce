@@ -2,7 +2,7 @@
 
 ## 所需文件
 
-- **来源文件**：`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Kontoauszug_Otto.xlsx`，Sheet 名：`Otto`
+- **来源文件**：`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Kontoauszug_Otto.xlsx`，Sheet 名：`Otto`
 - **目标文件**：当月 Umsatzsteuer 文件，例如 `D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_März.xlsx`
   - 如果用户在指令中指定了月份（如"三月"、"April"），自动推断对应文件名
   - 如果未指定，询问用户

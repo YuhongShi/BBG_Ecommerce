@@ -4,7 +4,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 import openpyxl
 
-KONTOAUSZUG = r"D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Kontoauszug_Otto.xlsx"
+KONTOAUSZUG = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Kontoauszug_Otto.xlsx"
 UMSATZ = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_März.xlsx"
 
 # Full Kontoauszug Otto sheet

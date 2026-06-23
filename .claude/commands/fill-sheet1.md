@@ -70,7 +70,7 @@ Sheet1 列结构：
 - 运行前确认文件未在 Excel 中打开，否则会报 PermissionError
 
 **脚本路径**：直接生成内联 Python 脚本运行（无需保存为固定文件）；也可复用
-`D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce\fill_sheet1_from_pdf.py`
+`D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce\fill_sheet1_from_pdf.py`
 （每次运行前用新数据覆盖 TRANSACTIONS 列表）。
 
 ### 第五步：输出确认

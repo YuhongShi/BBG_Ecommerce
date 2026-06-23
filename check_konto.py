@@ -2,7 +2,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 import openpyxl
 
-wb = openpyxl.load_workbook(r"D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Kontoauszug_Otto.xlsx", data_only=True)
+wb = openpyxl.load_workbook(r"D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Kontoauszug_Otto.xlsx", data_only=True)
 print('Sheets:', wb.sheetnames)
 ws = wb['Otto']
 print('Headers:', [c.value for c in ws[1]])

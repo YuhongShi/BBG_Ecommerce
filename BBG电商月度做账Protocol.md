@@ -3,7 +3,7 @@
 ## 前提条件
 
 用 Claude Code 打开目录：
-`D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce`
+`D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce`
 
 所有 `/fill-*` 命令均需在此目录下运行。
 
@@ -24,7 +24,7 @@
 **步骤 3** — 准备 Kontoauszug.xlsx
 
 打开 `Umsatzsteuer_[Monat].xlsx`，将 Sheet1 的**前 4 列**（Nr、Datum、Zahlungsverkehr、Betrag）复制，粘贴到：
-`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Kontoauszug.xlsx`（覆盖保存）
+`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Kontoauszug.xlsx`（覆盖保存）
 
 ---
 
@@ -48,7 +48,7 @@ b. 登录 `bbggermany.service@gmail.com`，搜索对应日期，找到标题为
 c. 打开该 PDF，找到 Vorgangstyp 列，从 COMMISSION 行起逐行复制 **Rechnungs-ID**，在邮件中搜索并下载对应附件
 
 d. 将 `AZ-DE-...` 文件放入：
-`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\receipts\`
+`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\receipts\`
 
 e. 运行 `download_otto_invoice.py`（同目录下），脚本通过 API 自动下载其余文件至 `downloaded_receipts\`
 
@@ -59,7 +59,7 @@ g. 重复 a–f，直到 Sheet1 所有 OTTO 入账均处理完毕
 **步骤 3** — 汇总计算
 
 将所有 `Zahlungsbeleg_*` 文件夹复制至：
-`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Otto\[Jahr]\`
+`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Otto\[Jahr]\`
 然后运行 `otto.py`，导出 `Kontoauszug_Otto.xlsx`
 
 **步骤 4** — 填入报表
@@ -93,7 +93,7 @@ g. 重复 a–f，直到 Sheet1 所有 OTTO 入账均处理完毕
 
 **步骤 2** — 更新脚本路径
 
-打开 `D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce\fill_amazon.py`，将开头两行改为当月：
+打开 `D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce\fill_amazon.py`，将开头两行改为当月：
 
 ```python
 FOLDER = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Amazon\[YYYY]年[M]月"
@@ -129,14 +129,14 @@ python fill_amazon.py
 **步骤 2** — 准备 eBay CSV 文件
 
 在以下路径新建文件夹：
-`D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Ebay_Rechnung\bis[YYYYMM]\`
+`D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Ebay_Rechnung\bis[YYYYMM]\`
 
 将当月 eBay CSV 账单从以下路径**复制**到该文件夹：
 `D:\Workstation_Yuhong\BBG\电商\网买做账\Ebay\[Jahr]\[Monat]\`
 
 **步骤 3** — 更新脚本路径
 
-打开 `D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\ebay.py`，将第 16 行的目录名改为当月：
+打开 `D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\ebay.py`，将第 16 行的目录名改为当月：
 
 ```python
 EBAY_CSV_DIR = os.path.join(BASE_DIR, "Ebay_Rechnung", "bis[YYYYMM]")
@@ -146,7 +146,7 @@ EBAY_CSV_DIR = os.path.join(BASE_DIR, "Ebay_Rechnung", "bis[YYYYMM]")
 
 **步骤 4** — 运行脚本
 
-在 `D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\` 目录下运行：
+在 `D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\` 目录下运行：
 
 ```
 python ebay.py

@@ -2,7 +2,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 import openpyxl
 
-src_path = r"D:\Workstation_Yuhong\Yuhong's_File\Python\Buchhaltung\Kontoauszug_Otto.xlsx"
+src_path = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Buchhaltung\Kontoauszug_Otto.xlsx"
 dst_path = r"D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_Mai.xlsx"
 
 # 读取 Kontoauszug_Otto（11列：Nr,Marktplatz,Netto,Ust,Brutto,Ref,Comm,CommR,Pay,PayR,Summe）

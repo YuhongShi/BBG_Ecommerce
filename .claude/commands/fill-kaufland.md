@@ -12,7 +12,7 @@
 - **目标文件**：当月 Umsatzsteuer 文件，例如 `D:\Workstation_Yuhong\BBG\电商\网买做账\Umsatzsteuer_März.xlsx`
   - 如果用户在指令中指定了月份（如"三月"、"April"），自动推断对应文件名
   - 如果未指定，询问用户
-- **处理脚本**：`D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce\fill_kaufland.py`
+- **处理脚本**：`D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce\fill_kaufland.py`
 
 如果 openpyxl 未安装，先运行 `pip install openpyxl`。
 
@@ -49,7 +49,7 @@
 ### 第二步：运行脚本
 
 ```
-python "D:\Workstation_Yuhong\Yuhong's_File\Python\BBG_Ecommerce\fill_kaufland.py" \
+python "D:\Workstation_Yuhong\BBG\电商\网买做账\BBG_Ecommerce\fill_kaufland.py" \
   --umsatz "<Umsatzsteuer文件路径>" \
   --kaufland "<当月Kaufland施总文件路径>" \
   --prev-kaufland "<上月Kaufland施总文件路径>"
